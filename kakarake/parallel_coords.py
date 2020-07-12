@@ -17,6 +17,8 @@ from sklearn.cluster import (
     SpectralClustering,
 )
 
+from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
+
 
 def parallel_coordinates(
     data: pd.DataFrame,
@@ -185,18 +187,46 @@ def group_objectives(data):
     return groups[-1]
 
 
+def GaussianMixtureclustering(data):
+    lowest_bic = np.infty
+    bic = []
+    n_components_range = range(1, 15)
+    cv_types = ["spherical", "tied", "diag", "full"]
+    for cv_type in cv_types:
+        for n_components in n_components_range:
+            # Fit a Gaussian mixture with EM
+            gmm = BayesianGaussianMixture(
+                n_components=n_components, covariance_type=cv_type
+            )
+            gmm.fit(data)
+            bic.append(-gmm.score(data))
+            # bic.append(gmm.bic(data))
+            if bic[-1] < lowest_bic:
+                lowest_bic = bic[-1]
+                best_gmm = gmm
+
+    return best_gmm.predict(data)
+
+
 if __name__ == "__main__":
-    data = pd.read_csv("c432-110.csv", header=None, sep="\s+")[range(2, 11)]
+    # data = pd.read_csv("c432-110.csv", header=None, sep="\s+")[range(2, 11)]
+    data = pd.read_csv("c432-88.csv", header=None, sep="\s+")[range(2, 11)]
+    # data = pd.read_csv("c432-141.csv", header=None, sep="\s+")[range(2, 11)]
+    # data = pd.read_csv("u9-99.csv", header=None, sep="\s+")[range(2, 11)]
     # groups = KMeans(n_clusters=3).fit(data).labels_
-    groups = AffinityPropagation().fit(data).labels_
-    print(groups)
+    # groups = AffinityPropagation().fit(data).labels_
+    groups = GaussianMixtureclustering(data)
     obj_order = group_objectives(data)
-    positions = np.linspace(0, 1, len(data.columns))
-    pos = a = np.ones_like(obj_order, dtype=float)
-    col_order = []
-    for i, val in zip(obj_order, positions):
-        pos[i] = val
-        col_order.append(data.columns[i])
-    print(col_order)
+    col_order = [data.columns[i] for i in obj_order]
+
+    # reordering objectives
     data = data[col_order]
-    parallel_coordinates(data, color_groups=groups,).show()
+    corr = spearmanr(data).correlation
+
+    axis_len = np.asarray([corr[i, i + 1] for i in range(len(data.columns) - 1)])
+    axis_len = np.abs(axis_len)
+    axis_len = axis_len / sum(axis_len)
+    axis_dist = np.cumsum(np.append(0, axis_len))
+    parallel_coordinates(data, color_groups=groups, axis_positions=axis_dist).show()
+    # parallel_coordinates(data).show()
+    # parallel_coordinates(data, color_groups=groups,).show()
