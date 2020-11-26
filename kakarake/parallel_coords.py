@@ -6,6 +6,7 @@ import plotly.io as pio
 from typing import Union, List
 from matplotlib import cm
 from scipy.stats import spearmanr
+from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import (
     KMeans,
     DBSCAN,
@@ -188,9 +189,10 @@ def group_objectives(data):
 
 
 def GaussianMixtureclustering(data):
+    data = StandardScaler().fit_transform(data)
     lowest_bic = np.infty
     bic = []
-    n_components_range = range(1, 15)
+    n_components_range = range(1, 11)
     cv_types = ["spherical", "tied", "diag", "full"]
     for cv_type in cv_types:
         for n_components in n_components_range:
@@ -224,9 +226,21 @@ if __name__ == "__main__":
     corr = spearmanr(data).correlation
 
     axis_len = np.asarray([corr[i, i + 1] for i in range(len(data.columns) - 1)])
-    axis_len = np.abs(axis_len)
+    axis_signs = np.cumprod(
+        np.sign(
+            np.hstack(
+                (1, np.asarray([corr[i, i + 1] for i in range(len(data.columns) - 1)]))
+            )
+        )
+    )
+    axis_len = 1 / np.abs(axis_len)  #  Reciprocal for reverse
+
+    axis_len = axis_len / sum(axis_len)
+    axis_len = axis_len + 0.15  # Minimum distance between axes
     axis_len = axis_len / sum(axis_len)
     axis_dist = np.cumsum(np.append(0, axis_len))
-    parallel_coordinates(data, color_groups=groups, axis_positions=axis_dist).show()
+    parallel_coordinates(
+        axis_signs * data, color_groups=groups, axis_positions=axis_dist
+    ).show()
     # parallel_coordinates(data).show()
     # parallel_coordinates(data, color_groups=groups,).show()
