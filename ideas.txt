@@ -1,0 +1,17 @@
+Discrete location allocation problem
+i, j -> [0, 9]
+
+C_i,j = corr matrix
+
+y_j = 1 if j is a cluster center, 0 otherwise
+
+x_i,j = 1 if i is allocated to j, 0 otherwise
+
+sum(y_j) = 3 or 4 (num clusters)
+
+for every i, sum(x_i,j) = 1
+
+x_i,j < y_j for all i,j
+
+max sum(c_i,j*x_i,j)
+max min distance from cluster center
