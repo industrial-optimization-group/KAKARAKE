@@ -3,6 +3,7 @@ from kakarake.parallel_coords import (
     group_objectives,
     GaussianMixtureclustering,
 )
+
 import pandas as pd
 import numpy as np
 import plotly.express as ex
@@ -219,6 +220,29 @@ def auto_par_coords(
     # correlation matrix
     corr_fig = annotated_heatmap(corr, original_order, obj_order)
     return fig1, corr_fig
+
+
+def order_objectives(data: pd.DataFrame):
+    # Calculating correlations
+    corr = spearmanr(data).correlation
+    # axes order: solving TSP
+    distances = -np.abs(corr)
+    obj_order = solve_tsp(distances)
+    return corr, obj_order
+
+
+def calculate_axes_positions(data, obj_order, corr, dist_parameter):
+    # axes positions
+    order = np.asarray(list((zip(obj_order[:-1], obj_order[1:]))))
+    axis_len = corr[order[:, 0], order[:, 1]]
+    axis_len = 1 / np.abs(axis_len)  #  Reciprocal for reverse
+    axis_len = axis_len / sum(axis_len)
+    axis_len = axis_len + dist_parameter  # Minimum distance between axes
+    axis_len = axis_len / sum(axis_len)
+    axis_dist = np.cumsum(np.append(0, axis_len))
+    # Axis signs (normalizing negative correlations)
+    axis_signs = np.cumprod(np.sign(np.hstack((1, corr[order[:, 0], order[:, 1]]))))
+    return data.iloc[:, obj_order], axis_dist, axis_signs
 
 
 if __name__ == "__main__":

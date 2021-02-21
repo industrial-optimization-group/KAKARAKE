@@ -23,6 +23,7 @@ tsp_solver2 = "^0.4.1"
 pulp = "^2.3.1"
 dash-bootstrap-components = "^0.11.1"
 seaborn = "^0.11.1"
+h5py = "^3.1.0"
 
 [tool.poetry.dev-dependencies]
 
