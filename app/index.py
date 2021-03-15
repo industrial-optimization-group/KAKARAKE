@@ -23,6 +23,11 @@ import numpy as np
 import base64
 import io
 
+from sklearn import manifold
+from functools import partial
+from plotly import express as ex
+from sklearn.preprocessing import StandardScaler
+
 app = dash.Dash(external_stylesheets=[dbc.themes.LITERA])
 
 # global vars
@@ -33,6 +38,26 @@ original_order = []
 modified_df = []
 axis_dist = []
 axis_signs = []
+
+n_neighbors = 10
+n_components = 2
+
+methods = {}
+
+LLE = partial(
+    manifold.LocallyLinearEmbedding, n_neighbors, n_components, eigen_solver="auto"
+)
+
+methods["LLE"] = LLE(method="standard")
+methods["LTSA"] = LLE(method="ltsa")
+methods["Hessian LLE"] = LLE(method="hessian")
+methods["Modified LLE"] = LLE(method="modified")
+methods["Isomap"] = manifold.Isomap(n_neighbors, n_components)
+methods["MDS"] = manifold.MDS(n_components, max_iter=100, n_init=1)
+methods["SE"] = manifold.SpectralEmbedding(
+    n_components=n_components, n_neighbors=n_neighbors
+)
+methods["t-SNE"] = manifold.TSNE(n_components=n_components, init="pca", random_state=0)
 
 app.layout = html.Div(
     [
@@ -119,6 +144,32 @@ app.layout = html.Div(
                                         ),
                                     ],
                                 ),
+                                dbc.FormGroup(
+                                    [
+                                        dbc.Label("Dimension reduction algorithm"),
+                                        dcc.Dropdown(
+                                            options=[
+                                                {"label": "LLE", "value": "LLE",},
+                                                {"label": "LTSA", "value": "LTSA",},
+                                                {
+                                                    "label": "Hessian LLE",
+                                                    "value": "Hessian LLE",
+                                                },
+                                                {
+                                                    "label": "Modified LLE",
+                                                    "value": "Modified LLE",
+                                                },
+                                                {"label": "Isomap", "value": "Isomap",},
+                                                {"label": "MDS", "value": "MDS",},
+                                                {"label": "SE", "value": "SE",},
+                                                {"label": "t-SNE", "value": "t-SNE",},
+                                            ],
+                                            value="t-SNE",
+                                            multi=False,
+                                            id="reduced-plot-dropdown",
+                                        ),
+                                    ]
+                                ),
                             ],
                         ),
                         dbc.Form(
@@ -192,9 +243,17 @@ app.layout = html.Div(
                     width={"size": 7, "offset": 1},
                 ),
                 dbc.Col(
-                    dcc.Graph(
-                        id="heatmap",
-                        config=dict(displayModeBar=False, scrollZoom=False),
+                    dbc.Row(
+                        [
+                            dcc.Graph(
+                                id="heatmap",
+                                config=dict(displayModeBar=False, scrollZoom=False),
+                            ),
+                            dcc.Graph(
+                                id="reduced-plot",
+                                config=dict(displayModeBar=False, scrollZoom=False),
+                            ),
+                        ]
                     ),
                     width={"size": 3},
                 ),
@@ -309,19 +368,29 @@ def soln_clustering(button_click, num_clusters, clustering_algorithm):
 @app.callback(
     Output("parcoord", "figure"),
     Output("heatmap", "figure"),
+    Output("reduced-plot", "figure"),
     Input("plot-btn", "n_clicks"),
     State("advanced-checklist", "value"),
     State("dist-param", "value"),
     State("soln-cluster-dump", "children"),
+    State("reduced-plot-dropdown", "value"),
     prevent_initial_call=True,
 )
-def update_output(button_click, checklist, dist_parameter, groups):
-    global df, axis_dist, axis_signs, corr, original_order, obj_order
+def update_output(button_click, checklist, dist_parameter, groups, red_dim_algo):
+    global df, axis_dist, axis_signs, corr, original_order, obj_order, methods, LLE
     if not button_click:
         PreventUpdate()
     solns = True if "solns" in checklist else False
     bands = True if "bands" in checklist else False
     medians = True if "medians" in checklist else False
+
+    reduced_data = StandardScaler().fit_transform(df)
+    reduced_data = methods[red_dim_algo].fit_transform(reduced_data)
+    fig = ex.scatter(x=reduced_data[:, 0], y=reduced_data[:, 1], color=groups)
+    fig.update_xaxes(zeroline=False, showticklabels=False, title_text="")
+    fig.update_yaxes(zeroline=False, showticklabels=False, title_text="")
+    fig.update_layout(title="Reduced view",)
+    fig.layout.coloraxis.showscale = False
     return (
         parallel_coordinates_bands_lines(
             modified_df,
@@ -333,6 +402,7 @@ def update_output(button_click, checklist, dist_parameter, groups):
             medians=medians,
         ),
         annotated_heatmap(corr, original_order, obj_order),
+        fig,
     )
 
 
