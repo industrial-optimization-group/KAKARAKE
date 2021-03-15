@@ -136,6 +136,14 @@ app.layout = html.Div(
                                                 "label": "Show Medians",
                                                 "value": "medians",
                                             },
+                                            {
+                                                "label": "Allow axes inversion",
+                                                "value": "axes",
+                                            },
+                                            {
+                                                "label": "Use absolute correlations",
+                                                "value": "abs_corr",
+                                            },
                                         ],
                                         value=["solns", "bands"],
                                         inline=True,
@@ -220,13 +228,12 @@ def toggle_collapse(n, is_open):
     Output("filename", "children"),
     Input("upload-data", "filename"),
     State("upload-data", "contents"),
+    State("advanced-checklist", "value"),
     prevent_initial_call=True,
 )
-def parse_contents(filename, contents):
+def parse_contents(filename, contents, checklist):
     global df
     global original_order
-    global corr
-    global obj_order
     if filename is None:
         PreventUpdate()
     content_type, content_string = contents.split(",")
@@ -242,8 +249,9 @@ def parse_contents(filename, contents):
     except Exception as e:
         print(e)
         return 0
+    if "ralph" in filename:
+        df = -df
     original_order = df.columns
-    corr, obj_order = order_objectives(df)
     return filename
 
 
@@ -251,13 +259,20 @@ def parse_contents(filename, contents):
     Output("calc-axes-dump", "children"),
     Input("calc-axes-btn", "n_clicks"),
     State("dist-param", "value"),
+    State("advanced-checklist", "value"),
     prevent_initial_call=True,
 )
-def calculate_axes(button_click, distance_parameter):
+def calculate_axes(button_click, distance_parameter, checklist):
     global df, obj_order, corr, axis_signs, axis_dist, modified_df
+
+    use_absolute_corr = True if "abs_corr" in checklist else False
+    corr, obj_order = order_objectives(df, use_absolute_corr)
+
     modified_df, axis_dist, axis_signs = calculate_axes_positions(
         df, obj_order, corr, distance_parameter
     )
+    if "axes" not in checklist:
+        axis_signs = list(np.abs(axis_signs))
     return 1
 
 

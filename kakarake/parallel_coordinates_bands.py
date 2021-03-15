@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 import plotly.figure_factory as ff
 from typing import Union, List
 from matplotlib import cm
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, pearsonr
 
 from tsp_solver.greedy import solve_tsp
 
@@ -163,13 +163,16 @@ def parallel_coordinates_bands_lines(
 def annotated_heatmap(correlation_matrix, col_names, order):
     corr = pd.DataFrame(correlation_matrix, index=col_names, columns=col_names)
     corr = corr[col_names[order]].loc[col_names[order[::-1]]]
-    corr = np.abs(np.rint(corr * 100) / 100)
-    return ff.create_annotated_heatmap(
+    # corr = np.abs(np.rint(corr * 100) / 100)  # TODO UNDO
+    corr = np.rint(corr * 100) / 100
+    fig = ff.create_annotated_heatmap(
         corr.values,
         x=list(corr.columns),
         y=list(corr.index),
         annotation_text=corr.astype(str).values,
     )
+    fig.update_layout(title="True correlations")
+    return fig
 
 
 def auto_par_coords(
@@ -222,12 +225,23 @@ def auto_par_coords(
     return fig1, corr_fig
 
 
-def order_objectives(data: pd.DataFrame):
+def order_objectives(data: pd.DataFrame, use_absolute_corr: bool):
     # Calculating correlations
-    corr = spearmanr(data).correlation
+    # corr = spearmanr(data).correlation  # Pearson's coeff is better than Spearmann's, in some cases
+    corr = np.asarray(
+        [
+            [
+                pearsonr(data.values[:, i], data.values[:, j])[0]
+                for j in range(len(data.columns))
+            ]
+            for i in range(len(data.columns))
+        ]
+    )
     # axes order: solving TSP
-    distances = -np.abs(corr)
-    obj_order = solve_tsp(distances)
+    distances = corr
+    if use_absolute_corr:
+        distances = np.abs(distances)
+    obj_order = solve_tsp(-distances)
     return corr, obj_order
 
 
