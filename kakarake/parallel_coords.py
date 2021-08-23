@@ -7,6 +7,7 @@ from typing import Union, List
 from matplotlib import cm
 from scipy.stats import spearmanr
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import silhouette_score
 from sklearn.cluster import (
     KMeans,
     DBSCAN,
@@ -197,9 +198,7 @@ def GaussianMixtureclustering(data):
     for cv_type in cv_types:
         for n_components in n_components_range:
             # Fit a Gaussian mixture with EM
-            gmm = BayesianGaussianMixture(
-                n_components=n_components, covariance_type=cv_type
-            )
+            gmm = GaussianMixture(n_components=n_components, covariance_type=cv_type)
             gmm.fit(data)
             bic.append(-gmm.score(data))
             # bic.append(gmm.bic(data))
@@ -208,6 +207,26 @@ def GaussianMixtureclustering(data):
                 best_gmm = gmm
 
     return best_gmm.predict(data)
+
+
+def DBSCANclustering(data):
+    X = StandardScaler().fit_transform(data)
+    eps_options = np.linspace(0.01, 0.9, 20)
+    best_score = -np.infty
+    best_labels = [1] * len(X)
+    for eps_option in eps_options:
+        db = DBSCAN(eps=eps_option, min_samples=10).fit(X)
+        core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
+        core_samples_mask[db.core_sample_indices_] = True
+        labels = db.labels_
+        try:
+            score = silhouette_score(X, labels)
+        except ValueError:
+            score = -np.infty
+        if score > best_score:
+            best_score = score
+            best_labels = labels
+    return best_labels
 
 
 if __name__ == "__main__":

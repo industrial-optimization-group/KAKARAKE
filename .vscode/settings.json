@@ -1,5 +1,5 @@
 {
-  "python.pythonPath": "C:\\Projects\\.virtualenvs\\KAKARAKE\\Scripts\\python.exe",
+  "python.pythonPath": "E:\\Projects\\.virtualenvs\\kakarake\\Scripts\\python.exe",
   "python.formatting.provider": "black",
   "editor.rulers": [88, 120]
 }

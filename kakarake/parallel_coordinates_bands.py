@@ -2,6 +2,7 @@ from kakarake.parallel_coords import (
     parallel_coordinates,
     group_objectives,
     GaussianMixtureclustering,
+    DBSCANclustering
 )
 
 import pandas as pd
@@ -67,8 +68,9 @@ def parallel_coordinates_bands_lines(
     scaled_data.insert(0, "group", value=color_groups)
     for name, solns in scaled_data.groupby("group"):
         cluster_id = solns["group"].values[0]
+        num_solns = len(solns["group"].values)
         color = "rgba" + str(colorscale(cluster_id))
-        low = solns.drop("group", axis=1).quantile(0.25)
+        low = solns.drop("group", axis=1).quantile(0.25)  # TODO Change back to 25/75
         high = solns.drop("group", axis=1).quantile(0.75)
         median = solns.drop("group", axis=1).median()
         if bands is True:
@@ -77,7 +79,7 @@ def parallel_coordinates_bands_lines(
                 x=axis_positions,
                 y=low,
                 line={"color": color},
-                name=f"50% band: Cluster {cluster_id}",
+                name=f"50% band: Cluster {cluster_id}; {num_solns} Solutions",
                 mode="lines",
                 legendgroup=f"50% band: Cluster {cluster_id}",
                 showlegend=True,
@@ -249,8 +251,10 @@ def calculate_axes_positions(data, obj_order, corr, dist_parameter):
     # axes positions
     order = np.asarray(list((zip(obj_order[:-1], obj_order[1:]))))
     axis_len = corr[order[:, 0], order[:, 1]]
-    axis_len = 1 / np.abs(axis_len)  #  Reciprocal for reverse
-    axis_len = axis_len / sum(axis_len)
+    # axis_len = 1 / np.abs(axis_len)  #  Reciprocal for reverse
+    axis_len = 1 - axis_len  # TODO Make this formula available to the user
+    # axis_len = np.abs(axis_len)
+    # axis_len = axis_len / sum(axis_len) #TODO Changed
     axis_len = axis_len + dist_parameter  # Minimum distance between axes
     axis_len = axis_len / sum(axis_len)
     axis_dist = np.cumsum(np.append(0, axis_len))

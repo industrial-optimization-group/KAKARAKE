@@ -26,6 +26,7 @@ import io
 from sklearn import manifold
 from functools import partial
 from plotly import express as ex
+from matplotlib import cm
 from sklearn.preprocessing import StandardScaler
 
 app = dash.Dash(external_stylesheets=[dbc.themes.LITERA])
@@ -386,10 +387,15 @@ def update_output(button_click, checklist, dist_parameter, groups, red_dim_algo)
 
     reduced_data = StandardScaler().fit_transform(df)
     reduced_data = methods[red_dim_algo].fit_transform(reduced_data)
+
+    uniquegroups = list(np.unique(groups))
+    colorscale = cm.get_cmap("Accent", len(uniquegroups))
     fig = ex.scatter(x=reduced_data[:, 0], y=reduced_data[:, 1], color=groups)
+    fig.data[0]["marker"]["color"] = [f"rgba{colorscale(group)}" for group in groups]
     fig.update_xaxes(zeroline=False, showticklabels=False, title_text="")
     fig.update_yaxes(zeroline=False, showticklabels=False, title_text="")
     fig.update_layout(title="Reduced view",)
+    fig.update_traces(text=groups, hovertemplate="Cluster: %{text}")
     fig.layout.coloraxis.showscale = False
     return (
         parallel_coordinates_bands_lines(
