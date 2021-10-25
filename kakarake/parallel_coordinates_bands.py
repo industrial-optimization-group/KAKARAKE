@@ -1,8 +1,7 @@
 from kakarake.parallel_coords import (
     parallel_coordinates,
     group_objectives,
-    GaussianMixtureclustering,
-    DBSCANclustering
+    cluster,
 )
 
 import pandas as pd
@@ -15,8 +14,6 @@ from matplotlib import cm
 from scipy.stats import spearmanr, pearsonr
 
 from tsp_solver.greedy import solve_tsp
-
-from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
 
 import os
 
@@ -49,7 +46,11 @@ def parallel_coordinates_bands_lines(
     elif isinstance(color_groups, (np.ndarray, list)):
         groups = list(np.unique(color_groups))
         groupsdict = dict(zip(groups, range(len(groups))))
-        colorscale = cm.get_cmap("Accent", len(groups))
+        if len(groups) <= 8:
+            colorscale = cm.get_cmap("Accent", len(groups))
+            # print("hi!")
+        else:
+            colorscale = cm.get_cmap("tab20", len(groups))
     data = data * axis_signs
     num_labels = 10
     # Scaling
@@ -132,7 +133,7 @@ def parallel_coordinates_bands_lines(
         label_text = np.linspace(
             scales[col_name]["min"], scales[col_name]["max"], num_labels
         )
-        label_text = ["{:g}".format(float("{:.4g}".format(i))) for i in label_text]
+        label_text = ["<b>{:.3g}</b>".format(i) for i in label_text]
         fig.add_scatter(
             x=[axis_positions[i]] * num_labels,
             y=np.linspace(0, 1, num_labels),
@@ -144,12 +145,12 @@ def parallel_coordinates_bands_lines(
         )
         fig.add_scatter(
             x=[axis_positions[i]],
-            y=[1.15],
+            y=[1.10],
             text=f"<b>{col_name}</b>",
             mode="text",
             showlegend=False,
         )
-        fig.add_scatter(
+        """fig.add_scatter(
             x=[axis_positions[i]], y=[1.1], text=better, mode="text", showlegend=False,
         )
         fig.add_scatter(
@@ -158,7 +159,9 @@ def parallel_coordinates_bands_lines(
             text="is better",
             mode="text",
             showlegend=False,
-        )
+        )"""
+    # fig.update_layout(legend=dict(orientation="h", yanchor="top"))
+    fig.update_layout(font_size=18)
     return fig
 
 
@@ -201,7 +204,7 @@ def auto_par_coords(
     # Axis signs (normalizing negative correlations)
     axis_signs = np.cumprod(np.sign(np.hstack((1, corr[order[:, 0], order[:, 1]]))))
     data = data.iloc[:, obj_order]
-    groups = GaussianMixtureclustering(data)
+    groups = cluster(data, algorithm="GMM")
 
     fig1 = parallel_coordinates_bands_lines(
         data,
@@ -227,7 +230,7 @@ def auto_par_coords(
     return fig1, corr_fig
 
 
-def order_objectives(data: pd.DataFrame, use_absolute_corr: bool):
+def order_objectives(data: pd.DataFrame, use_absolute_corr: bool = False):
     # Calculating correlations
     # corr = spearmanr(data).correlation  # Pearson's coeff is better than Spearmann's, in some cases
     corr = np.asarray(
@@ -247,12 +250,18 @@ def order_objectives(data: pd.DataFrame, use_absolute_corr: bool):
     return corr, obj_order
 
 
-def calculate_axes_positions(data, obj_order, corr, dist_parameter):
+def calculate_axes_positions(
+    data, obj_order, corr, dist_parameter, distance_formula: int = 1
+):
     # axes positions
     order = np.asarray(list((zip(obj_order[:-1], obj_order[1:]))))
     axis_len = corr[order[:, 0], order[:, 1]]
-    # axis_len = 1 / np.abs(axis_len)  #  Reciprocal for reverse
-    axis_len = 1 - axis_len  # TODO Make this formula available to the user
+    if distance_formula == 1:
+        axis_len = 1 - axis_len  # TODO Make this formula available to the user
+    elif distance_formula == 2:
+        axis_len = 1 / np.abs(axis_len)  #  Reciprocal for reverse
+    else:
+        raise ValueError("distance_formula should be either 1 or 2 (int)")
     # axis_len = np.abs(axis_len)
     # axis_len = axis_len / sum(axis_len) #TODO Changed
     axis_len = axis_len + dist_parameter  # Minimum distance between axes

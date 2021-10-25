@@ -8,6 +8,8 @@ from kakarake.parallel_coordinates_bands import (
     parallel_coordinates_bands_lines,
     GaussianMixtureclustering,
     DBSCANclustering,
+    order_objectives,
+    calculate_axes_positions,
 )
 
 
@@ -15,8 +17,10 @@ from scipy.stats import pearsonr
 
 from tsp_solver.greedy import solve_tsp
 
-
-files = [name.split(".csv")[:-1][0] for name in os.listdir("data")]
+# All files
+# files = [name.split(".csv")[:-1][0] for name in os.listdir("data")]
+# Some files
+# files = ["MetallurgicalProblem4d", "MetallurgicalProblem3d"]
 num_files = len(files)
 
 
@@ -26,34 +30,25 @@ def auto_par_coords(
     bands: bool = True,
     medians: bool = True,
     dist_parameter: float = 0.05,
+    use_absolute_corr: bool = False,
+    distance_formula: int = 1,
+    clustering: str = "DBSCAN",
 ):
-    # Calculating correlations
-    corr = np.asarray(
-        [
-            [
-                pearsonr(data.values[:, i], data.values[:, j])[0]
-                for j in range(len(data.columns))
-            ]
-            for i in range(len(data.columns))
-        ]
+    # Calculating correlations and axes positions
+    corr, obj_order = order_objectives(data, use_absolute_corr=use_absolute_corr)
+
+    ordered_data, axis_dist, axis_signs = calculate_axes_positions(
+        data,
+        obj_order,
+        corr,
+        dist_parameter=dist_parameter,
+        distance_formula=distance_formula,
     )
-    original_order = data.columns
-    # axes order: solving TSP
-    distances = -np.abs(corr)
-    obj_order = solve_tsp(distances)
-    # axes positions
-    order = np.asarray(list((zip(obj_order[:-1], obj_order[1:]))))
-    axis_len = corr[order[:, 0], order[:, 1]]
-    axis_len = 1 / np.abs(axis_len)  #  Reciprocal for reverse
-    axis_len = axis_len / sum(axis_len)
-    axis_len = axis_len + dist_parameter  # Minimum distance between axes
-    axis_len = axis_len / sum(axis_len)
-    axis_dist = np.cumsum(np.append(0, axis_len))
-    # Axis signs (normalizing negative correlations)
-    axis_signs = np.cumprod(np.sign(np.hstack((1, corr[order[:, 0], order[:, 1]]))))
-    data = data.iloc[:, obj_order]
-    groups = np.asarray(DBSCANclustering(data))
-    groups = groups - np.min(groups)
+    if clustering == "DBSCAN":
+        groups = np.asarray(DBSCANclustering(ordered_data))
+    elif clustering == "Gaussian":
+        groups = np.asarray(GaussianMixtureclustering(ordered_data))
+    groups = groups - np.min(groups)  # translate minimum to 0.
     fig1 = parallel_coordinates_bands_lines(
         data,
         color_groups=groups,

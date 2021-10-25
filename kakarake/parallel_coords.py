@@ -178,7 +178,7 @@ def group_objectives(data):
             ):
                 new_group = obj1_group + obj2_group
             else:
-                print("hi")
+                # print("hi")
                 raise ValueError
             groups.append(new_group)
             group_id[new_group] = len(groups) - 1
@@ -189,7 +189,7 @@ def group_objectives(data):
     return groups[-1]
 
 
-def GaussianMixtureclustering(data):
+def GaussianMixtureClusteringWithBIC(data):
     data = StandardScaler().fit_transform(data)
     lowest_bic = np.infty
     bic = []
@@ -209,24 +209,62 @@ def GaussianMixtureclustering(data):
     return best_gmm.predict(data)
 
 
-def DBSCANclustering(data):
+def GaussianMixtureClusteringWithSilhouette(data):
     X = StandardScaler().fit_transform(data)
-    eps_options = np.linspace(0.01, 0.9, 20)
+    best_score = -np.infty
+    best_labels = []
+    n_components_range = range(1, 11)
+    cv_types = ["spherical", "tied", "diag", "full"]
+    for cv_type in cv_types:
+        for n_components in n_components_range:
+            # Fit a Gaussian mixture with EM
+            gmm = GaussianMixture(n_components=n_components, covariance_type=cv_type)
+            labels = gmm.fit_predict(X)
+            try:
+                score = silhouette_score(X, labels, metric="cosine")
+            except ValueError:
+                score = -np.infty
+            if score > best_score:
+                best_score = score
+                best_labels = labels
+    # print(best_score)
+    return best_labels
+
+
+def DBSCANClustering(data):
+    X = StandardScaler().fit_transform(data)
+    eps_options = np.linspace(0.01, 1, 20)
     best_score = -np.infty
     best_labels = [1] * len(X)
+    chosen_eps = 0.01
     for eps_option in eps_options:
-        db = DBSCAN(eps=eps_option, min_samples=10).fit(X)
+        db = DBSCAN(eps=eps_option, min_samples=10, metric="cosine").fit(X)
         core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
         core_samples_mask[db.core_sample_indices_] = True
         labels = db.labels_
         try:
-            score = silhouette_score(X, labels)
+            score = silhouette_score(X, labels, metric="cosine")
         except ValueError:
             score = -np.infty
         if score > best_score:
             best_score = score
             best_labels = labels
+            chosen_eps = eps_option
+    # print((best_score, chosen_eps))
     return best_labels
+
+
+def cluster(data, algorithm="DBSCAN", score="silhoutte"):
+    if not (score == "silhoutte" or score == "BIC"):
+        raise ValueError()
+    if not (algorithm == "GMM" or algorithm == "DBSCAN"):
+        raise ValueError()
+    if algorithm == "DBSCAN":
+        return DBSCANClustering(data)
+    elif score == "silhoutte":
+        return GaussianMixtureClusteringWithSilhouette(data)
+    else:
+        return GaussianMixtureClusteringWithBIC(data)
 
 
 if __name__ == "__main__":
