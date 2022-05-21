@@ -1,32 +1,19 @@
-import dash
-from dash.exceptions import PreventUpdate
-import dash_bootstrap_components as dbc
-import dash_html_components as html
-import dash_core_components as dcc
-
-from dash.dependencies import Input, Output, State
-
-from kakarake.parallel_coordinates_bands import (
-    parallel_coordinates_bands_lines,
-    annotated_heatmap,
-    order_objectives,
-    calculate_axes_positions,
-)
-from sklearn.cluster import (
-    KMeans,
-    AgglomerativeClustering,
-    SpectralClustering,
-)
-from kakarake.parallel_coords import GaussianMixtureclustering
-import pandas as pd
-import numpy as np
 import base64
 import io
-
-from sklearn import manifold
 from functools import partial
-from plotly import express as ex
+
+import dash
+import dash_bootstrap_components as dbc
+import dash_core_components as dcc
+import dash_html_components as html
+import numpy as np
+import pandas as pd
+from dash.dependencies import Input, Output, State
+from dash.exceptions import PreventUpdate
+from kakarake.SCORE import annotated_heatmap, auto_SCORE
 from matplotlib import cm
+from plotly import express as ex
+from sklearn import manifold
 from sklearn.preprocessing import StandardScaler
 
 app = dash.Dash(external_stylesheets=[dbc.themes.LITERA])
@@ -122,11 +109,16 @@ app.layout = html.Div(
                                                     "value": "AC",
                                                 },
                                                 {
-                                                    "label": "Gaussian Mixture",
+                                                    "label": "Gaussian Mixture - Silhoutte",
                                                     "value": "GMM",
                                                 },
+                                                {
+                                                    "label": "Gaussian Mixture - BIC",
+                                                    "value": "GMMbic",
+                                                },
+                                                {"label": "DBSCAN", "value": "DBSCAN",},
                                             ],
-                                            value="GMM",
+                                            value="GMMbic",
                                             multi=False,
                                             id="soln-cluster-dropdown",
                                         ),
@@ -141,7 +133,7 @@ app.layout = html.Div(
                                             step=0.01,
                                             min=0,
                                             max=1,
-                                            value=0.1,
+                                            value=0.4,
                                         ),
                                     ],
                                 ),
@@ -189,12 +181,12 @@ app.layout = html.Div(
                                                 "value": "medians",
                                             },
                                             {
-                                                "label": "Allow axes inversion",
-                                                "value": "axes",
-                                            },
-                                            {
                                                 "label": "Use absolute correlations",
                                                 "value": "abs_corr",
+                                            },
+                                            {
+                                                "label": "Use Method 2 distance formula",
+                                                "value": "dist_formula",
                                             },
                                         ],
                                         value=["solns", "bands"],
@@ -213,20 +205,6 @@ app.layout = html.Div(
         dbc.Row(
             [
                 dbc.Col(
-                    dbc.Button(
-                        "Calculate axes positions", id="calc-axes-btn", color="primary"
-                    ),
-                    width={"size": 2, "offset": 2},
-                    className="row justify-content-end",
-                ),
-                dbc.Col(
-                    dbc.Button(
-                        "Perform clustering", id="soln-clustering-btn", color="primary"
-                    ),
-                    width={"size": 2, "offset": 1},
-                    className="row justify-content-center",
-                ),
-                dbc.Col(
                     dbc.Button("Plot data", id="plot-btn", color="primary"),
                     width={"size": 2, "offset": 1},
                 ),
@@ -239,9 +217,9 @@ app.layout = html.Div(
                     dcc.Graph(
                         id="parcoord",
                         config=dict(displayModeBar=False, scrollZoom=False),
-                        style={"height": "850px"},
+                        style={"height": "100vh"},
                     ),
-                    width={"size": 7, "offset": 1},
+                    width={"size": 8},
                 ),
                 dbc.Col(
                     dbc.Row(
@@ -256,7 +234,7 @@ app.layout = html.Div(
                             ),
                         ]
                     ),
-                    width={"size": 3},
+                    width={"size": 2},
                 ),
             ]
         ),
@@ -315,7 +293,7 @@ def parse_contents(filename, contents, checklist):
     return filename
 
 
-@app.callback(
+"""@app.callback(
     Output("calc-axes-dump", "children"),
     Input("calc-axes-btn", "n_clicks"),
     State("dist-param", "value"),
@@ -333,10 +311,10 @@ def calculate_axes(button_click, distance_parameter, checklist):
     )
     if "axes" not in checklist:
         axis_signs = list(np.abs(axis_signs))
-    return 1
+    return 1"""
 
 
-@app.callback(
+"""@app.callback(
     Output("soln-cluster-dump", "children"),
     Input("soln-clustering-btn", "n_clicks"),
     State("num-soln-clusters", "value"),
@@ -364,6 +342,7 @@ def soln_clustering(button_click, num_clusters, clustering_algorithm):
             .labels_
         )
     return groups
+"""
 
 
 @app.callback(
@@ -373,17 +352,55 @@ def soln_clustering(button_click, num_clusters, clustering_algorithm):
     Input("plot-btn", "n_clicks"),
     State("advanced-checklist", "value"),
     State("dist-param", "value"),
-    State("soln-cluster-dump", "children"),
     State("reduced-plot-dropdown", "value"),
+    State("num-soln-clusters", "value"),
+    State("soln-cluster-dropdown", "value"),
     prevent_initial_call=True,
 )
-def update_output(button_click, checklist, dist_parameter, groups, red_dim_algo):
-    global df, axis_dist, axis_signs, corr, original_order, obj_order, methods, LLE
-    if not button_click:
-        PreventUpdate()
-    solns = True if "solns" in checklist else False
-    bands = True if "bands" in checklist else False
-    medians = True if "medians" in checklist else False
+def update_output(
+    button_click,
+    checklist,
+    dist_parameter,
+    red_dim_algo,
+    num_clusters,
+    clusters_dropdown,
+):
+    global df
+    show_solutions, show_medians, use_absolute_corr = False, False, False
+    if "solns" in checklist:
+        show_solutions = True
+    if "medians" in checklist:
+        show_medians = True
+    if "abs_corr" in checklist:
+        use_absolute_corr = True
+    if "dist_formula" in checklist:
+        distance_formula = 2
+    else:
+        distance_formula = 1
+
+    if clusters_dropdown == "GMM":
+        clustering_algorithm = "GMM"
+        clustering_score = "silhoutte"
+    elif clusters_dropdown == "GMMbic":
+        clustering_algorithm = "GMM"
+        clustering_score = "BIC"
+    elif clusters_dropdown == "DBSCAN":
+        clustering_algorithm = "DBSCAN"
+        clustering_score = "silhoutte"
+    else:
+        raise ValueError("Other algorithms not supported in the GUI yet.")
+
+    scorebandsplot, corr, obj_order, groups = auto_SCORE(
+        df,
+        medians=show_medians,
+        solutions=show_solutions,
+        dist_parameter=dist_parameter,
+        use_absolute_corr=use_absolute_corr,
+        distance_formula=distance_formula,
+        clustering_algorithm=clustering_algorithm,
+        clustering_score=clustering_score,
+    )
+    heatmap = annotated_heatmap(corr, df.columns, obj_order)
 
     reduced_data = StandardScaler().fit_transform(df)
     reduced_data = methods[red_dim_algo].fit_transform(reduced_data)
@@ -397,19 +414,8 @@ def update_output(button_click, checklist, dist_parameter, groups, red_dim_algo)
     fig.update_layout(title="Reduced view",)
     fig.update_traces(text=groups, hovertemplate="Cluster: %{text}")
     fig.layout.coloraxis.showscale = False
-    return (
-        parallel_coordinates_bands_lines(
-            modified_df,
-            color_groups=groups,
-            axis_positions=axis_dist,
-            axis_signs=axis_signs,
-            solutions=solns,
-            bands=bands,
-            medians=medians,
-        ),
-        annotated_heatmap(corr, original_order, obj_order),
-        fig,
-    )
+
+    return scorebandsplot, heatmap, fig
 
 
 if __name__ == "__main__":

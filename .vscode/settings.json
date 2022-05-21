@@ -1,5 +1,8 @@
 {
   "python.pythonPath": "E:\\Projects\\.virtualenvs\\kakarake\\Scripts\\python.exe",
   "python.formatting.provider": "black",
-  "editor.rulers": [88, 120]
+  "editor.rulers": [88, 120],
+  "python.linting.flake8Enabled": false,
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": true
 }

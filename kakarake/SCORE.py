@@ -1,24 +1,17 @@
-from kakarake.parallel_coords import (
-    parallel_coordinates,
-    group_objectives,
-    cluster,
-)
+from typing import List, Union
 
-import pandas as pd
 import numpy as np
-import plotly.express as ex
-import plotly.graph_objects as go
+import pandas as pd
 import plotly.figure_factory as ff
-from typing import Union, List
+import plotly.graph_objects as go
 from matplotlib import cm
-from scipy.stats import spearmanr, pearsonr
-
+from scipy.stats import pearsonr
 from tsp_solver.greedy import solve_tsp
 
-import os
+from kakarake.clustering import cluster
 
 
-def parallel_coordinates_bands_lines(
+def SCORE_bands(
     data: pd.DataFrame,
     axis_signs=None,
     color_groups: Union[List, bool] = None,
@@ -51,8 +44,9 @@ def parallel_coordinates_bands_lines(
             # print("hi!")
         else:
             colorscale = cm.get_cmap("tab20", len(groups))
+    # colorscale = cm.get_cmap("viridis_r", len(groups))
     data = data * axis_signs
-    num_labels = 10
+    num_labels = 6
     # Scaling
     scaled_data = data - data.min(axis=0)
     scaled_data = scaled_data / scaled_data.max(axis=0)
@@ -70,7 +64,11 @@ def parallel_coordinates_bands_lines(
     for name, solns in scaled_data.groupby("group"):
         cluster_id = solns["group"].values[0]
         num_solns = len(solns["group"].values)
-        color = "rgba" + str(colorscale(cluster_id))
+        r, g, b, a = colorscale(cluster_id)
+        a = 0.6
+        a_soln = 0.6
+        color = f"rgba({r}, {g}, {b}, {a})"
+        color_soln = f"rgba({r}, {g}, {b}, {a_soln})"
         low = solns.drop("group", axis=1).quantile(0.25)  # TODO Change back to 25/75
         high = solns.drop("group", axis=1).quantile(0.75)
         median = solns.drop("group", axis=1).median()
@@ -80,7 +78,7 @@ def parallel_coordinates_bands_lines(
                 x=axis_positions,
                 y=low,
                 line={"color": color},
-                name=f"50% band: Cluster {cluster_id}; {num_solns} Solutions",
+                name=f"50% band: Cluster {cluster_id}; {num_solns} Solutions        ",
                 mode="lines",
                 legendgroup=f"50% band: Cluster {cluster_id}",
                 showlegend=True,
@@ -93,6 +91,7 @@ def parallel_coordinates_bands_lines(
                 y=high,
                 line={"color": color},
                 name=f"Cluster {cluster_id}",
+                fillcolor=color,
                 mode="lines",
                 legendgroup=f"50% band: Cluster {cluster_id}",
                 showlegend=False,
@@ -120,8 +119,8 @@ def parallel_coordinates_bands_lines(
                 fig.add_scatter(
                     x=axis_positions,
                     y=soln,
-                    line={"color": color},
-                    name=f"Solutions: Cluster {cluster_id}",
+                    line={"color": color_soln},
+                    name=f"Solutions: Cluster {cluster_id}              ",
                     legendgroup=f"Solutions: Cluster {cluster_id}",
                     showlegend=legend,
                     visible=show_solutions,
@@ -129,24 +128,69 @@ def parallel_coordinates_bands_lines(
                 legend = False
     # Axis lines
     for i, col_name in enumerate(column_names):
-        better = "Upper" if axis_signs[i] == -1 else "Lower"
+        # better = "Upper" if axis_signs[i] == -1 else "Lower"
         label_text = np.linspace(
             scales[col_name]["min"], scales[col_name]["max"], num_labels
         )
-        label_text = ["<b>{:.3g}</b>".format(i) for i in label_text]
+        # label_text = ["{:.3g}".format(i) for i in label_text]
+        heights = np.linspace(0, 1, num_labels)
+        scale_factors = []
+        for current_label in label_text:
+            try:
+                with np.errstate(divide="ignore"):
+                    scale_factors.append(int(np.floor(np.log10(np.abs(current_label)))))
+            except OverflowError:
+                pass
+
+        scale_factor = int(np.median(scale_factors))
+        if scale_factor == -1:
+            scale_factor = 0
+
+        label_text = label_text / 10 ** (scale_factor)
+        label_text = ["{:.1f}".format(i) for i in label_text]
+        if scale_factor != 0:
+            scale_factor_text = f"e{scale_factor}"
+        else:
+            scale_factor_text = ""
+
+        # Bottom axis label
+        fig.add_scatter(
+            x=[axis_positions[i]],
+            y=[heights[0]],
+            text=[label_text[0] + scale_factor_text],
+            textposition="bottom center",
+            mode="text",
+            line={"color": "black"},
+            showlegend=False,
+        )
+        # Top axis label
+        fig.add_scatter(
+            x=[axis_positions[i]],
+            y=[heights[-1]],
+            text=[label_text[-1] + scale_factor_text],
+            textposition="top center",
+            mode="text",
+            line={"color": "black"},
+            showlegend=False,
+        )
+        label_text[0] = ""
+        label_text[-1] = ""
+        # Intermediate axes labels
         fig.add_scatter(
             x=[axis_positions[i]] * num_labels,
-            y=np.linspace(0, 1, num_labels),
+            y=heights,
             text=label_text,
             textposition="middle left",
             mode="markers+lines+text",
             line={"color": "black"},
             showlegend=False,
         )
+
         fig.add_scatter(
             x=[axis_positions[i]],
             y=[1.10],
-            text=f"<b>{col_name}</b>",
+            text=f"{col_name}",
+            textfont=dict(size=28),
             mode="text",
             showlegend=False,
         )
@@ -160,8 +204,8 @@ def parallel_coordinates_bands_lines(
             mode="text",
             showlegend=False,
         )"""
-    # fig.update_layout(legend=dict(orientation="h", yanchor="top"))
     fig.update_layout(font_size=18)
+    fig.update_layout(legend=dict(orientation="h", yanchor="top", font=dict(size=24)))
     return fig
 
 
@@ -178,56 +222,6 @@ def annotated_heatmap(correlation_matrix, col_names, order):
     )
     fig.update_layout(title="True correlations")
     return fig
-
-
-def auto_par_coords(
-    data: pd.DataFrame,
-    solutions: bool = True,
-    bands: bool = False,
-    medians: bool = False,
-    dist_parameter: float = 0.05,
-):
-    # Calculating correlations
-    corr = spearmanr(data).correlation
-    original_order = data.columns
-    # axes order: solving TSP
-    distances = -np.abs(corr)
-    obj_order = solve_tsp(distances)
-    # axes positions
-    order = np.asarray(list((zip(obj_order[:-1], obj_order[1:]))))
-    axis_len = corr[order[:, 0], order[:, 1]]
-    axis_len = 1 / np.abs(axis_len)  #  Reciprocal for reverse
-    axis_len = axis_len / sum(axis_len)
-    axis_len = axis_len + dist_parameter  # Minimum distance between axes
-    axis_len = axis_len / sum(axis_len)
-    axis_dist = np.cumsum(np.append(0, axis_len))
-    # Axis signs (normalizing negative correlations)
-    axis_signs = np.cumprod(np.sign(np.hstack((1, corr[order[:, 0], order[:, 1]]))))
-    data = data.iloc[:, obj_order]
-    groups = cluster(data, algorithm="GMM")
-
-    fig1 = parallel_coordinates_bands_lines(
-        data,
-        color_groups=groups,
-        axis_positions=axis_dist,
-        axis_signs=axis_signs,
-        solutions=solutions,
-        bands=bands,
-        medians=medians,
-    )
-    # No axis inversion
-    """fig2 = parallel_coordinates_bands_lines_v2(
-        data,
-        color_groups=groups,
-        axis_positions=axis_dist,
-        axis_signs=None,
-        solutions=solutions,
-        bands=bands,
-        medians=medians,
-    )"""
-    # correlation matrix
-    corr_fig = annotated_heatmap(corr, original_order, obj_order)
-    return fig1, corr_fig
 
 
 def order_objectives(data: pd.DataFrame, use_absolute_corr: bool = False):
@@ -272,11 +266,41 @@ def calculate_axes_positions(
     return data.iloc[:, obj_order], axis_dist, axis_signs
 
 
-if __name__ == "__main__":
-    # data = pd.read_csv("c432-110.csv", header=None, sep="\s+")[range(2, 11)]
-    for filename in os.listdir("data"):
-        data = pd.read_csv("data/" + filename)
-        auto_par_coords(data, solutions=True, bands=True)[0].write_html(
-            file="Outputs/" + filename.split(".")[0] + "_plot.html"
-        )
+def auto_SCORE(
+    data: pd.DataFrame,
+    solutions: bool = True,
+    bands: bool = True,
+    medians: bool = False,
+    dist_parameter: float = 0.05,
+    use_absolute_corr: bool = False,
+    distance_formula: int = 1,
+    flip_axes: bool = False,
+    clustering_algorithm: str = "DBSCAN",
+    clustering_score: str = "silhoutte",
+):
+    # Calculating correlations and axes positions
+    corr, obj_order = order_objectives(data, use_absolute_corr=use_absolute_corr)
 
+    ordered_data, axis_dist, axis_signs = calculate_axes_positions(
+        data,
+        obj_order,
+        corr,
+        dist_parameter=dist_parameter,
+        distance_formula=distance_formula,
+    )
+    if not flip_axes:
+        axis_signs = None
+    groups = cluster(
+        ordered_data, algorithm=clustering_algorithm, score=clustering_score
+    )
+    groups = groups - np.min(groups)  # translate minimum to 0.
+    fig1 = SCORE_bands(
+        ordered_data,
+        color_groups=groups,
+        axis_positions=axis_dist,
+        axis_signs=axis_signs,
+        solutions=solutions,
+        bands=bands,
+        medians=medians,
+    )
+    return fig1, corr, obj_order, groups
