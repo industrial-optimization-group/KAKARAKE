@@ -1,3 +1,9 @@
+"""
+Use the auto_SCORE function to generate the SCORE bands visualization.
+
+This module contains the functions which generate SCORE bands visualizations. It also contains functions to calculate
+the order and positions of the objective axes, as well as a heatmap of correlation matrix.
+"""  # noqa: D212
 from typing import List, Union
 
 import numpy as np
@@ -13,15 +19,47 @@ from kakarake.clustering import cluster
 
 def SCORE_bands(
     data: pd.DataFrame,
-    axis_signs=None,
-    color_groups: Union[List, bool] = None,
+    axis_signs: np.ndarray = None,
+    color_groups: Union[List, np.ndarray] = None,
     axis_positions: np.ndarray = None,
     solutions: bool = True,
     bands: bool = False,
     medians: bool = False,
-):
+) -> go.Figure:
+    """Generate SCORE bands figure from the provided data.
+
+    Args:
+        data (pd.DataFrame): Pandas dataframe where each column represents an objective and each row is an objective
+        vector. The column names are displayed as the objective names in the generated figure. Each element in the
+        dataframe must be numeric.
+
+        color_groups (Union[List, np.ndarray], optional): List or numpy array of the same length as the number of 
+        objective vectors. The elements should be contiguous set of integers starting at 1. The element value represents
+        the Cluster ID of the corresponding objective vector. Defaults to None (though this behaviour is not fully
+        tested yet).
+
+        axis_positions (np.ndarray, optional): 1-D numpy array of the same length as the number of objectives. The value
+        represents the horizontal position of the corresponding objective axes. The value of the first and last element
+        should be 0 and 1 respectively, and all intermediate values should lie between 0 and 1.
+        Defaults to None, in which case all axes are positioned equidistant.
+
+        axis_signs (np.ndarray, optional): 1-D Numpy array of the same length as the number of objectives. Each element
+        can either be 1 or -1. A value of -1 flips the objective in the SCORE bands visualization. This feature is
+        experimental and should be ignored for now. Defaults to None.
+
+        solutions (bool, optional): Show or hide individual solutions. Defaults to True.
+
+        bands (bool, optional): Show or hide cluster bands. Defaults to False.
+
+        medians (bool, optional): Show or hide cluster medians. Defaults to False.
+
+    Returns:
+        go.Figure: SCORE bands plot.
+
+    """  # noqa: D212, D213, D406, D407
     # show on render
     show_solutions = "legendonly"
+    bands_visible = True
     if bands:
         show_medians = "legendonly"
     if medians:
@@ -38,22 +76,20 @@ def SCORE_bands(
         colorscale = cm.get_cmap("viridis")
     elif isinstance(color_groups, (np.ndarray, list)):
         groups = list(np.unique(color_groups))
-        groupsdict = dict(zip(groups, range(len(groups))))
         if len(groups) <= 8:
             colorscale = cm.get_cmap("Accent", len(groups))
+            # print(len(groups))
             # print("hi!")
         else:
             colorscale = cm.get_cmap("tab20", len(groups))
     # colorscale = cm.get_cmap("viridis_r", len(groups))
     data = data * axis_signs
     num_labels = 6
-    # Scaling
+
+    # Scaling the objective values between 0 and 1.
     scaled_data = data - data.min(axis=0)
     scaled_data = scaled_data / scaled_data.max(axis=0)
-    scales = (
-        pd.DataFrame([data.min(axis=0), data.max(axis=0)], index=["min", "max"])
-        * axis_signs
-    )
+    scales = pd.DataFrame([data.min(axis=0), data.max(axis=0)], index=["min", "max"]) * axis_signs
 
     fig = go.Figure()
     fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False)
@@ -61,53 +97,58 @@ def SCORE_bands(
     fig.update_layout(plot_bgcolor="rgba(0,0,0,0)")
 
     scaled_data.insert(0, "group", value=color_groups)
-    for name, solns in scaled_data.groupby("group"):
-        cluster_id = solns["group"].values[0]
-        num_solns = len(solns["group"].values)
-        r, g, b, a = colorscale(cluster_id)
+    for cluster_id, solns in scaled_data.groupby("group"):
+        # TODO: Many things here are very inefficient. Improve when free.
+        num_solns = len(solns)
+
+        r, g, b, a = colorscale(cluster_id - 1)  # Needed as cluster numbering starts at 1
         a = 0.6
         a_soln = 0.6
-        color = f"rgba({r}, {g}, {b}, {a})"
+        color_bands = f"rgba({r}, {g}, {b}, {a})"
         color_soln = f"rgba({r}, {g}, {b}, {a_soln})"
-        low = solns.drop("group", axis=1).quantile(0.25)  # TODO Change back to 25/75
+
+        low = solns.drop("group", axis=1).quantile(0.25)
         high = solns.drop("group", axis=1).quantile(0.75)
         median = solns.drop("group", axis=1).median()
+
         if bands is True:
             # lower bound of the band
             fig.add_scatter(
                 x=axis_positions,
                 y=low,
-                line={"color": color},
+                line={"color": color_bands},
                 name=f"50% band: Cluster {cluster_id}; {num_solns} Solutions        ",
                 mode="lines",
                 legendgroup=f"50% band: Cluster {cluster_id}",
                 showlegend=True,
                 line_shape="spline",
                 hovertext=f"Cluster {cluster_id}",
+                visible=bands_visible,
             )
             # upper bound of the band
             fig.add_scatter(
                 x=axis_positions,
                 y=high,
-                line={"color": color},
+                line={"color": color_bands},
                 name=f"Cluster {cluster_id}",
-                fillcolor=color,
+                fillcolor=color_bands,
                 mode="lines",
                 legendgroup=f"50% band: Cluster {cluster_id}",
                 showlegend=False,
                 line_shape="spline",
                 fill="tonexty",
                 hovertext=f"Cluster {cluster_id}",
+                visible=bands_visible,
             )
         if medians is True:
             # median
             fig.add_scatter(
                 x=axis_positions,
                 y=median,
-                line={"color": color},
+                line={"color": color_bands},
                 name=f"Median: Cluster {cluster_id}",
                 mode="lines+markers",
-                marker=dict(line=dict(color="Black", width=2)),
+                marker={"line": {"color": "Black", "width": 2}},
                 legendgroup=f"Median: Cluster {cluster_id}",
                 showlegend=True,
                 visible=show_medians,
@@ -129,9 +170,7 @@ def SCORE_bands(
     # Axis lines
     for i, col_name in enumerate(column_names):
         # better = "Upper" if axis_signs[i] == -1 else "Lower"
-        label_text = np.linspace(
-            scales[col_name]["min"], scales[col_name]["max"], num_labels
-        )
+        label_text = np.linspace(scales[col_name]["min"], scales[col_name]["max"], num_labels)
         # label_text = ["{:.3g}".format(i) for i in label_text]
         heights = np.linspace(0, 1, num_labels)
         scale_factors = []
@@ -146,12 +185,10 @@ def SCORE_bands(
         if scale_factor == -1:
             scale_factor = 0
 
+        # TODO: This sometimes doesn't generate the correct label text. Check with datasets where objs lie between (0,1).
         label_text = label_text / 10 ** (scale_factor)
         label_text = ["{:.1f}".format(i) for i in label_text]
-        if scale_factor != 0:
-            scale_factor_text = f"e{scale_factor}"
-        else:
-            scale_factor_text = ""
+        scale_factor_text = f"e{scale_factor}" if scale_factor != 0 else ""
 
         # Bottom axis label
         fig.add_scatter(
@@ -187,12 +224,7 @@ def SCORE_bands(
         )
 
         fig.add_scatter(
-            x=[axis_positions[i]],
-            y=[1.10],
-            text=f"{col_name}",
-            textfont=dict(size=28),
-            mode="text",
-            showlegend=False,
+            x=[axis_positions[i]], y=[1.10], text=f"{col_name}", textfont={"size": 28}, mode="text", showlegend=False,
         )
         """fig.add_scatter(
             x=[axis_positions[i]], y=[1.1], text=better, mode="text", showlegend=False,
@@ -205,34 +237,48 @@ def SCORE_bands(
             showlegend=False,
         )"""
     fig.update_layout(font_size=18)
-    fig.update_layout(legend=dict(orientation="h", yanchor="top", font=dict(size=24)))
+    fig.update_layout(legend={"orientation": "h", "yanchor": "top", "font": {"size": 24}})
     return fig
 
 
-def annotated_heatmap(correlation_matrix, col_names, order):
+def annotated_heatmap(correlation_matrix: np.ndarray, col_names: List, order: Union[List, np.ndarray]) -> go.Figure:
+    """Create a heatmap of the correlation matrix. Probably should be named something else.
+
+    Args:
+        correlation_matrix (np.ndarray): 2-D square array of correlation values between pairs of objectives.
+        col_names (List): Objective names.
+        order (Union[List, np.ndarray]): Order in which the objectives are shown in SCORE bands.
+
+    Returns:
+        go.Figure: The heatmap
+    """  # noqa: D212, D213, D406, D407
     corr = pd.DataFrame(correlation_matrix, index=col_names, columns=col_names)
     corr = corr[col_names[order]].loc[col_names[order[::-1]]]
-    # corr = np.abs(np.rint(corr * 100) / 100)  # TODO UNDO
-    corr = np.rint(corr * 100) / 100
+    corr = np.rint(corr * 100) / 100  # Take upto two significant figures only to make heatmap readable.
     fig = ff.create_annotated_heatmap(
-        corr.values,
-        x=list(corr.columns),
-        y=list(corr.index),
-        annotation_text=corr.astype(str).values,
+        corr.to_numpy(), x=list(corr.columns), y=list(corr.index), annotation_text=corr.astype(str).to_numpy(),
     )
     fig.update_layout(title="True correlations")
     return fig
 
 
 def order_objectives(data: pd.DataFrame, use_absolute_corr: bool = False):
+    """Calculate the order of objectives.
+
+    Also returns the correlation matrix.
+
+    Args:
+        data (pd.DataFrame): Data to be visualized.
+        use_absolute_corr (bool, optional): Use absolute value of the correlation to calculate order. Defaults to False.
+
+    Returns:
+        tuple: The first element is the correlation matrix. The second element is the order of the objectives.
+    """
     # Calculating correlations
     # corr = spearmanr(data).correlation  # Pearson's coeff is better than Spearmann's, in some cases
     corr = np.asarray(
         [
-            [
-                pearsonr(data.values[:, i], data.values[:, j])[0]
-                for j in range(len(data.columns))
-            ]
+            [pearsonr(data.to_numpy()[:, i], data.to_numpy()[:, j])[0] for j in range(len(data.columns))]
             for i in range(len(data.columns))
         ]
     )
@@ -244,9 +290,7 @@ def order_objectives(data: pd.DataFrame, use_absolute_corr: bool = False):
     return corr, obj_order
 
 
-def calculate_axes_positions(
-    data, obj_order, corr, dist_parameter, distance_formula: int = 1
-):
+def calculate_axes_positions(data, obj_order, corr, dist_parameter, distance_formula: int = 1):
     # axes positions
     order = np.asarray(list((zip(obj_order[:-1], obj_order[1:]))))
     axis_len = corr[order[:, 0], order[:, 1]]
@@ -278,22 +322,39 @@ def auto_SCORE(
     clustering_algorithm: str = "DBSCAN",
     clustering_score: str = "silhoutte",
 ):
+    """Generate the SCORE Bands visualization for a dataset with predefined values for the hyperparameters.
+
+    Args:
+        data (pd.DataFrame): Dataframe of objective values. The column names should be the objective names. Each row
+        should be an objective vector.
+
+        solutions (bool, optional): Show or hide individual solutions. Defaults to True.
+        bands (bool, optional): Show or hide the cluster bands. Defaults to True.
+        medians (bool, optional): Show or hide the cluster medians. Defaults to False.
+        dist_parameter (float, optional): Change the relative distances between the objective axes. Increase this value
+        if objectives are placed too close together. Decrease this value if the objectives are equidistant in a problem
+        with objective clusters. Defaults to 0.05.
+        use_absolute_corr (bool, optional): Use absolute value of the correlation to calculate the placement of axes.
+        Defaults to False.
+        distance_formula (int, optional): The value should be 1 or 2. Check the paper for details. Defaults to 1.
+        flip_axes (bool, optional): Do not use this option. Defaults to False.
+        clustering_algorithm (str, optional): Currently supported options: "GMM" and "DBSCAN". Defaults to "DBSCAN".
+        clustering_score (str, optional): If "GMM" is chosen for clustering algorithm, the scoring mechanism can be
+        either "silhoutte" or "BIC". Defaults to "silhoutte".
+
+    Returns:
+        _type_: _description_
+    """
     # Calculating correlations and axes positions
     corr, obj_order = order_objectives(data, use_absolute_corr=use_absolute_corr)
 
     ordered_data, axis_dist, axis_signs = calculate_axes_positions(
-        data,
-        obj_order,
-        corr,
-        dist_parameter=dist_parameter,
-        distance_formula=distance_formula,
+        data, obj_order, corr, dist_parameter=dist_parameter, distance_formula=distance_formula,
     )
     if not flip_axes:
         axis_signs = None
-    groups = cluster(
-        ordered_data, algorithm=clustering_algorithm, score=clustering_score
-    )
-    groups = groups - np.min(groups)  # translate minimum to 0.
+    groups = cluster(ordered_data, algorithm=clustering_algorithm, score=clustering_score)
+    groups = groups - np.min(groups) + 1  # translate minimum to 1.
     fig1 = SCORE_bands(
         ordered_data,
         color_groups=groups,

@@ -50,10 +50,7 @@ methods["t-SNE"] = manifold.TSNE(n_components=n_components, init="pca", random_s
 app.layout = html.Div(
     [
         dbc.Row(
-            dbc.Col(
-                html.H1("Fluid Parallel Coordinates"),
-                className="row justify-content-center",
-            ),
+            dbc.Col(html.H1("SCORE bands"), className="row justify-content-center",),
         ),
         dbc.Row(
             [
@@ -206,10 +203,9 @@ app.layout = html.Div(
             [
                 dbc.Col(
                     dbc.Button("Plot data", id="plot-btn", color="primary"),
-                    width={"size": 2, "offset": 1},
+                    className="row justify-content-center",
                 ),
             ],
-            className="mt-3 mb-3",
         ),
         dbc.Row(
             [
@@ -217,9 +213,9 @@ app.layout = html.Div(
                     dcc.Graph(
                         id="parcoord",
                         config=dict(displayModeBar=False, scrollZoom=False),
-                        style={"height": "100vh"},
+                        style={"height": "75vh"},
                     ),
-                    width={"size": 8},
+                    width=8,
                 ),
                 dbc.Col(
                     dbc.Row(
@@ -227,14 +223,16 @@ app.layout = html.Div(
                             dcc.Graph(
                                 id="heatmap",
                                 config=dict(displayModeBar=False, scrollZoom=False),
+                                style={"height": "37vh"},
                             ),
                             dcc.Graph(
                                 id="reduced-plot",
                                 config=dict(displayModeBar=False, scrollZoom=False),
+                                style={"height": "37vh"},
                             ),
                         ]
                     ),
-                    width={"size": 2},
+                    width=2,
                 ),
             ]
         ),
@@ -407,16 +405,18 @@ def update_output(
 
     uniquegroups = list(np.unique(groups))
     colorscale = cm.get_cmap("Accent", len(uniquegroups))
-    fig = ex.scatter(x=reduced_data[:, 0], y=reduced_data[:, 1], color=groups)
-    fig.data[0]["marker"]["color"] = [f"rgba{colorscale(group)}" for group in groups]
+    fig = ex.scatter(x=reduced_data[:, 0], y=reduced_data[:, 1], color=groups - 1)
+    fig.data[0]["marker"]["color"] = [f"rgba{colorscale(group-1)}" for group in groups]
     fig.update_xaxes(zeroline=False, showticklabels=False, title_text="")
     fig.update_yaxes(zeroline=False, showticklabels=False, title_text="")
     fig.update_layout(title="Reduced view",)
     fig.update_traces(text=groups, hovertemplate="Cluster: %{text}")
     fig.layout.coloraxis.showscale = False
 
+    fig.update_layout(font=dict(size=28))
+    heatmap.update_layout(font=dict(size=28))
     return scorebandsplot, heatmap, fig
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=False)

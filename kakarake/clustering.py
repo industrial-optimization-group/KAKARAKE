@@ -1,17 +1,8 @@
 import numpy as np
 import pandas as pd
-from sklearn.cluster import (
-    DBSCAN,
-    OPTICS,
-    AffinityPropagation,
-    AgglomerativeClustering,
-    Birch,
-    KMeans,
-    MeanShift,
-    SpectralClustering,
-)
+from sklearn.cluster import DBSCAN
 from sklearn.metrics import silhouette_score
-from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
+from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import StandardScaler
 
 
@@ -19,7 +10,7 @@ def GaussianMixtureClusteringWithBIC(data: pd.DataFrame):
     data = StandardScaler().fit_transform(data)
     lowest_bic = np.infty
     bic = []
-    n_components_range = range(1, 11)
+    n_components_range = range(1, min(11, len(data)))
     cv_types = ["spherical", "tied", "diag", "full"]
     for cv_type in cv_types:
         for n_components in n_components_range:
@@ -39,7 +30,7 @@ def GaussianMixtureClusteringWithSilhouette(data: pd.DataFrame):
     X = StandardScaler().fit_transform(data)
     best_score = -np.infty
     best_labels = []
-    n_components_range = range(1, 11)
+    n_components_range = range(1, min(11, len(data)))
     cv_types = ["spherical", "tied", "diag", "full"]
     for cv_type in cv_types:
         for n_components in n_components_range:
@@ -62,7 +53,6 @@ def DBSCANClustering(data: pd.DataFrame):
     eps_options = np.linspace(0.01, 1, 20)
     best_score = -np.infty
     best_labels = [1] * len(X)
-    chosen_eps = 0.01
     for eps_option in eps_options:
         db = DBSCAN(eps=eps_option, min_samples=10, metric="cosine").fit(X)
         core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
@@ -75,7 +65,6 @@ def DBSCANClustering(data: pd.DataFrame):
         if score > best_score:
             best_score = score
             best_labels = labels
-            chosen_eps = eps_option
     # print((best_score, chosen_eps))
     return best_labels
 
