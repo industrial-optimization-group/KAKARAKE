@@ -297,7 +297,7 @@ def calculate_axes_positions(data, obj_order, corr, dist_parameter, distance_for
     if distance_formula == 1:
         axis_len = 1 - axis_len  # TODO Make this formula available to the user
     elif distance_formula == 2:
-        axis_len = 1 / np.abs(axis_len)  #  Reciprocal for reverse
+        axis_len = 1 / (np.abs(axis_len) + 1)  #  Reciprocal for reverse
     else:
         raise ValueError("distance_formula should be either 1 or 2 (int)")
     # axis_len = np.abs(axis_len)
