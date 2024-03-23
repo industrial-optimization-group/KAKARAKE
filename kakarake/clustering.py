@@ -17,7 +17,7 @@ def GaussianMixtureClusteringWithBIC(data: pd.DataFrame):
             # Fit a Gaussian mixture with EM
             gmm = GaussianMixture(n_components=n_components, covariance_type=cv_type)
             gmm.fit(data)
-            bic.append(-gmm.score(data))
+            bic.append(gmm.score(data))
             # bic.append(gmm.bic(data))
             if bic[-1] < lowest_bic:
                 lowest_bic = bic[-1]
@@ -80,4 +80,3 @@ def cluster(data: pd.DataFrame, algorithm: str = "DBSCAN", score: str = "silhout
         return GaussianMixtureClusteringWithSilhouette(data)
     else:
         return GaussianMixtureClusteringWithBIC(data)
-

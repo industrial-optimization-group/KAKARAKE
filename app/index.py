@@ -32,9 +32,7 @@ n_components = 2
 
 methods = {}
 
-LLE = partial(
-    manifold.LocallyLinearEmbedding, n_neighbors, n_components, eigen_solver="auto"
-)
+LLE = partial(manifold.LocallyLinearEmbedding, n_neighbors, n_components, eigen_solver="auto")
 
 methods["LLE"] = LLE(method="standard")
 methods["LTSA"] = LLE(method="ltsa")
@@ -42,36 +40,40 @@ methods["Hessian LLE"] = LLE(method="hessian")
 methods["Modified LLE"] = LLE(method="modified")
 methods["Isomap"] = manifold.Isomap(n_neighbors, n_components)
 methods["MDS"] = manifold.MDS(n_components, max_iter=100, n_init=1)
-methods["SE"] = manifold.SpectralEmbedding(
-    n_components=n_components, n_neighbors=n_neighbors
-)
+methods["SE"] = manifold.SpectralEmbedding(n_components=n_components, n_neighbors=n_neighbors)
 methods["t-SNE"] = manifold.TSNE(n_components=n_components, init="pca", random_state=0)
 
 app.layout = html.Div(
     [
         dbc.Row(
-            dbc.Col(html.H1("SCORE bands"), className="row justify-content-center",),
+            dbc.Col(
+                html.H1("SCORE bands"),
+                className="row justify-content-center",
+            ),
         ),
         dbc.Row(
             [
                 dbc.Col(
                     dcc.Upload(
-                        dbc.Button("Input Data", color="primary",), id="upload-data"
+                        dbc.Button(
+                            "Input Data",
+                            color="primary",
+                        ),
+                        id="upload-data",
                     ),
-                    width={"size": 1, "offset": 4},
+                    width={"size": 1, "offset": 1},
                 ),
-                dbc.Col(html.Div(children="", id="filename"), width={"size": 2}),
+                dbc.Col(html.Div(children="", id="filename"), width={"size": 3}),
                 dbc.Col(
-                    dbc.Button(
-                        "Advanced Options", id="advanced-options", color="primary"
-                    ),
+                    dbc.Button("Plot data", id="plot-btn", color="primary"),
+                    className="row justify-content-center",
                 ),
             ]
         ),
         dbc.Row(
-            dbc.Col(
-                dbc.Collapse(
-                    children=[
+            [
+                dbc.Col(
+                    [
                         dbc.Form(
                             [
                                 dbc.FormGroup(
@@ -92,7 +94,10 @@ app.layout = html.Div(
                                         dbc.Label("Solution clustering algorithm"),
                                         dcc.Dropdown(
                                             options=[
-                                                {"label": "K-Means", "value": "KM",},
+                                                {
+                                                    "label": "K-Means",
+                                                    "value": "KM",
+                                                },
                                                 {
                                                     "label": "Spectral Clustering",
                                                     "value": "SC",
@@ -106,14 +111,17 @@ app.layout = html.Div(
                                                     "value": "AC",
                                                 },
                                                 {
-                                                    "label": "Gaussian Mixture - Silhoutte",
+                                                    "label": "Bayesian Gaussian Mixture - Silhoutte",
                                                     "value": "GMM",
                                                 },
                                                 {
-                                                    "label": "Gaussian Mixture - BIC",
+                                                    "label": "Bayesian Gaussian Mixture - BIC",
                                                     "value": "GMMbic",
                                                 },
-                                                {"label": "DBSCAN", "value": "DBSCAN",},
+                                                {
+                                                    "label": "DBSCAN",
+                                                    "value": "DBSCAN",
+                                                },
                                             ],
                                             value="GMMbic",
                                             multi=False,
@@ -133,32 +141,6 @@ app.layout = html.Div(
                                             value=0.4,
                                         ),
                                     ],
-                                ),
-                                dbc.FormGroup(
-                                    [
-                                        dbc.Label("Dimension reduction algorithm"),
-                                        dcc.Dropdown(
-                                            options=[
-                                                {"label": "LLE", "value": "LLE",},
-                                                {"label": "LTSA", "value": "LTSA",},
-                                                {
-                                                    "label": "Hessian LLE",
-                                                    "value": "Hessian LLE",
-                                                },
-                                                {
-                                                    "label": "Modified LLE",
-                                                    "value": "Modified LLE",
-                                                },
-                                                {"label": "Isomap", "value": "Isomap",},
-                                                {"label": "MDS", "value": "MDS",},
-                                                {"label": "SE", "value": "SE",},
-                                                {"label": "t-SNE", "value": "t-SNE",},
-                                            ],
-                                            value="t-SNE",
-                                            multi=False,
-                                            id="reduced-plot-dropdown",
-                                        ),
-                                    ]
                                 ),
                             ],
                         ),
@@ -191,48 +173,23 @@ app.layout = html.Div(
                                     )
                                 )
                             ],
-                            className="row justify-content-center mt-3 mb-3",
+                        ),
+                        dcc.Graph(
+                            id="heatmap",
+                            config=dict(displayModeBar=False, scrollZoom=False),
+                            style={"height": "45vh"},
                         ),
                     ],
-                    id="advanced-collapse",
+                    className="mt-3 mb-3 ml-3 mr-3",
+                    width=4,
                 ),
-                className="row justify-content-center mt-3 mb-3",
-            )
-        ),
-        dbc.Row(
-            [
-                dbc.Col(
-                    dbc.Button("Plot data", id="plot-btn", color="primary"),
-                    className="row justify-content-center",
-                ),
-            ],
-        ),
-        dbc.Row(
-            [
                 dbc.Col(
                     dcc.Graph(
                         id="parcoord",
                         config=dict(displayModeBar=False, scrollZoom=False),
-                        style={"height": "75vh"},
+                        style={"height": "85vh"},
                     ),
-                    width=8,
-                ),
-                dbc.Col(
-                    dbc.Row(
-                        [
-                            dcc.Graph(
-                                id="heatmap",
-                                config=dict(displayModeBar=False, scrollZoom=False),
-                                style={"height": "37vh"},
-                            ),
-                            dcc.Graph(
-                                id="reduced-plot",
-                                config=dict(displayModeBar=False, scrollZoom=False),
-                                style={"height": "37vh"},
-                            ),
-                        ]
-                    ),
-                    width=2,
+                    align="right",
                 ),
             ]
         ),
@@ -248,7 +205,7 @@ app.layout = html.Div(
 )
 
 
-@app.callback(
+"""@app.callback(
     Output("advanced-collapse", "is_open"),
     [Input("advanced-options", "n_clicks")],
     [State("advanced-collapse", "is_open")],
@@ -257,7 +214,7 @@ app.layout = html.Div(
 def toggle_collapse(n, is_open):
     if n:
         return not is_open
-    return is_open
+    return is_open"""
 
 
 @app.callback(
@@ -346,11 +303,11 @@ def soln_clustering(button_click, num_clusters, clustering_algorithm):
 @app.callback(
     Output("parcoord", "figure"),
     Output("heatmap", "figure"),
-    Output("reduced-plot", "figure"),
+    # Output("reduced-plot", "figure"),
     Input("plot-btn", "n_clicks"),
     State("advanced-checklist", "value"),
     State("dist-param", "value"),
-    State("reduced-plot-dropdown", "value"),
+    # State("reduced-plot-dropdown", "value"),
     State("num-soln-clusters", "value"),
     State("soln-cluster-dropdown", "value"),
     prevent_initial_call=True,
@@ -359,7 +316,7 @@ def update_output(
     button_click,
     checklist,
     dist_parameter,
-    red_dim_algo,
+    # red_dim_algo,
     num_clusters,
     clusters_dropdown,
 ):
@@ -400,22 +357,24 @@ def update_output(
     )
     heatmap = annotated_heatmap(corr, df.columns, obj_order)
 
-    reduced_data = StandardScaler().fit_transform(df)
-    reduced_data = methods[red_dim_algo].fit_transform(reduced_data)
+    # reduced_data = StandardScaler().fit_transform(df)
+    # reduced_data = methods[red_dim_algo].fit_transform(reduced_data)
 
-    uniquegroups = list(np.unique(groups))
-    colorscale = cm.get_cmap("Accent", len(uniquegroups))
-    fig = ex.scatter(x=reduced_data[:, 0], y=reduced_data[:, 1], color=groups - 1)
+    # uniquegroups = list(np.unique(groups))
+    # colorscale = cm.get_cmap("Accent", len(uniquegroups))
+    """fig = ex.scatter(x=reduced_data[:, 0], y=reduced_data[:, 1], color=groups - 1)
     fig.data[0]["marker"]["color"] = [f"rgba{colorscale(group-1)}" for group in groups]
     fig.update_xaxes(zeroline=False, showticklabels=False, title_text="")
     fig.update_yaxes(zeroline=False, showticklabels=False, title_text="")
-    fig.update_layout(title="Reduced view",)
+    fig.update_layout(
+        title="Reduced view",
+    )
     fig.update_traces(text=groups, hovertemplate="Cluster: %{text}")
     fig.layout.coloraxis.showscale = False
 
-    fig.update_layout(font=dict(size=28))
-    heatmap.update_layout(font=dict(size=28))
-    return scorebandsplot, heatmap, fig
+    fig.update_layout(font=dict(size=28))"""
+    heatmap.update_layout(font=dict(size=20))
+    return scorebandsplot, heatmap  # , fig
 
 
 if __name__ == "__main__":

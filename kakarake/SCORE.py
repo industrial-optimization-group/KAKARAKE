@@ -33,7 +33,7 @@ def SCORE_bands(
         vector. The column names are displayed as the objective names in the generated figure. Each element in the
         dataframe must be numeric.
 
-        color_groups (Union[List, np.ndarray], optional): List or numpy array of the same length as the number of 
+        color_groups (Union[List, np.ndarray], optional): List or numpy array of the same length as the number of
         objective vectors. The elements should be contiguous set of integers starting at 1. The element value represents
         the Cluster ID of the corresponding objective vector. Defaults to None (though this behaviour is not fully
         tested yet).
@@ -224,7 +224,12 @@ def SCORE_bands(
         )
 
         fig.add_scatter(
-            x=[axis_positions[i]], y=[1.10], text=f"{col_name}", textfont={"size": 28}, mode="text", showlegend=False,
+            x=[axis_positions[i]],
+            y=[1.10],
+            text=f"{col_name}",
+            textfont={"size": 28},
+            mode="text",
+            showlegend=False,
         )
         """fig.add_scatter(
             x=[axis_positions[i]], y=[1.1], text=better, mode="text", showlegend=False,
@@ -256,9 +261,12 @@ def annotated_heatmap(correlation_matrix: np.ndarray, col_names: List, order: Un
     corr = corr[col_names[order]].loc[col_names[order[::-1]]]
     corr = np.rint(corr * 100) / 100  # Take upto two significant figures only to make heatmap readable.
     fig = ff.create_annotated_heatmap(
-        corr.to_numpy(), x=list(corr.columns), y=list(corr.index), annotation_text=corr.astype(str).to_numpy(),
+        corr.to_numpy(),
+        x=list(corr.columns),
+        y=list(corr.index),
+        annotation_text=corr.astype(str).to_numpy(),
     )
-    fig.update_layout(title="True correlations")
+    fig.update_layout(title="Pearson correlation coefficients")
     return fig
 
 
@@ -349,7 +357,11 @@ def auto_SCORE(
     corr, obj_order = order_objectives(data, use_absolute_corr=use_absolute_corr)
 
     ordered_data, axis_dist, axis_signs = calculate_axes_positions(
-        data, obj_order, corr, dist_parameter=dist_parameter, distance_formula=distance_formula,
+        data,
+        obj_order,
+        corr,
+        dist_parameter=dist_parameter,
+        distance_formula=distance_formula,
     )
     if not flip_axes:
         axis_signs = None
