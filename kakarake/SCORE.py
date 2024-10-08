@@ -376,4 +376,4 @@ def auto_SCORE(
         bands=bands,
         medians=medians,
     )
-    return fig1, corr, obj_order, groups
+    return fig1, corr, obj_order, groups, axis_dist
