@@ -25,6 +25,7 @@ def SCORE_bands(
     solutions: bool = True,
     bands: bool = False,
     medians: bool = False,
+    quantile: float = 0.25,
 ) -> go.Figure:
     """Generate SCORE bands figure from the provided data.
 
@@ -52,6 +53,9 @@ def SCORE_bands(
         bands (bool, optional): Show or hide cluster bands. Defaults to False.
 
         medians (bool, optional): Show or hide cluster medians. Defaults to False.
+
+        quantile (float, optional): The quantile value to calculate the band. The band represents the range between 
+        (quantile) and (1 - quantile) quantiles of the objective values. Defaults to 0.25.
 
     Returns:
         go.Figure: SCORE bands plot.
@@ -107,8 +111,8 @@ def SCORE_bands(
         color_bands = f"rgba({r}, {g}, {b}, {a})"
         color_soln = f"rgba({r}, {g}, {b}, {a_soln})"
 
-        low = solns.drop("group", axis=1).quantile(0.25)
-        high = solns.drop("group", axis=1).quantile(0.75)
+        low = solns.drop("group", axis=1).quantile(quantile)
+        high = solns.drop("group", axis=1).quantile(1 - quantile)
         median = solns.drop("group", axis=1).median()
 
         if bands is True:
@@ -117,9 +121,9 @@ def SCORE_bands(
                 x=axis_positions,
                 y=low,
                 line={"color": color_bands},
-                name=f"50% band: Cluster {cluster_id}; {num_solns} Solutions        ",
+                name=f"{int(100 - 200*quantile)}% band: Cluster {cluster_id}; {num_solns} Solutions        ",
                 mode="lines",
-                legendgroup=f"50% band: Cluster {cluster_id}",
+                legendgroup=f"{int(100 - 200*quantile)}% band: Cluster {cluster_id}",
                 showlegend=True,
                 line_shape="spline",
                 hovertext=f"Cluster {cluster_id}",
@@ -133,7 +137,7 @@ def SCORE_bands(
                 name=f"Cluster {cluster_id}",
                 fillcolor=color_bands,
                 mode="lines",
-                legendgroup=f"50% band: Cluster {cluster_id}",
+                legendgroup=f"{int(100 - 200*quantile)}% band: Cluster {cluster_id}",
                 showlegend=False,
                 line_shape="spline",
                 fill="tonexty",
